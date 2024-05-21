@@ -46,16 +46,20 @@ pub fn grep(pattern: &str, flags: &Flags, files: &[&str]) -> Result<Vec<String>,
         let file = File::open(file_name)?;
         let reader = BufReader::new(file);
 
+        let mut file_has_match = false;
         for (index, line) in reader.lines().enumerate() {
             let line = line?;
             let line_number = index + 1;
         
             if line_matches(&line, pattern, flags) {
-                let result = format_result(file_name, line_number, &line, flags);
-                results.push(result);
-                
                 if flags.print_file_names {
-                    break;
+                    if !file_has_match {
+                        results.push(file_name.to_string());
+                        file_has_match = true;
+                    }
+                } else {
+                    let result = format_result(file_name, line_number, &line, flags, files);
+                    results.push(result);
                 }
             }
         }
@@ -68,21 +72,33 @@ fn line_matches(line: &str, pattern: &str, flags: &Flags) -> bool {
     let line = if flags.case_insensitive { line.to_lowercase() } else { line.to_string() };
     let pattern = if flags.case_insensitive { pattern.to_lowercase() } else { pattern.to_string() };
 
-    if flags.match_entire_line {
+    let matches = if flags.match_entire_line {
         line == pattern
-    } else if flags.invert {
-        !line.contains(&pattern)
     } else {
         line.contains(&pattern)
+    };
+
+    if flags.invert_match {
+        !matches
+    } else {
+        matches
     }
 }
 
-fn format_result(file_name: &str, line_number: usize, line: &str, flags: &Flags) -> String {
+fn format_result(file_name: &str, line_number: usize, line: &str, flags: &Flags, files: &[&str]) -> String {
     if flags.print_file_names {
         file_name.to_string()
     } else if flags.line_numbers {
-        format!("{}:{}:{}", file_name, line_number, line)
+        if files.len() > 1 {
+            format!("{}:{}:{}", file_name, line_number, line)
+        } else {
+            format!("{}:{}", line_number, line)
+        }
     } else {
-        line.to_string()
+        if files.len() > 1 {
+            format!("{}:{}", file_name, line)
+        } else {
+            line.to_string()
+        }
     }
 }
